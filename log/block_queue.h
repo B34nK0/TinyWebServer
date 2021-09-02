@@ -121,12 +121,13 @@ public:
         m_mutex.unlock();
         return tmp;
     }
+    // 采用线号量实现 生成者消费者模式，当queue有数据时唤醒等待消费的线程
     //往队列添加元素，需要将所有使用队列的线程先唤醒
     //当有元素push进队列,相当于生产者生产了一个元素
     //若当前没有线程等待条件变量,则唤醒无意义
     bool push(const T &item)
     {
-
+        //锁队列数组内容及数组位置
         m_mutex.lock();
         if (m_size >= m_max_size)
         {
@@ -135,7 +136,7 @@ public:
             m_mutex.unlock();
             return false;
         }
-
+        //采用数组槽位做队列
         m_back = (m_back + 1) % m_max_size;
         m_array[m_back] = item;
 
@@ -145,6 +146,7 @@ public:
         m_mutex.unlock();
         return true;
     }
+    //队列的消费线程会等待条件变量唤醒
     //pop时,如果当前队列没有元素,将会等待条件变量
     bool pop(T &item)
     {
@@ -152,7 +154,7 @@ public:
         m_mutex.lock();
         while (m_size <= 0)
         {
-            
+            //什么情况下会为失败
             if (!m_cond.wait(m_mutex.get()))
             {
                 m_mutex.unlock();

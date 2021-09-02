@@ -18,6 +18,7 @@ connection_pool::connection_pool()
 
 connection_pool *connection_pool::GetInstance()
 {
+	//static实现单例模式
 	static connection_pool connPool;
 	return &connPool;
 }
@@ -25,6 +26,7 @@ connection_pool *connection_pool::GetInstance()
 //构造初始化
 void connection_pool::init(string url, string User, string PassWord, string DBName, int Port, int MaxConn, int close_log)
 {
+	//设置数据库配置信息
 	m_url = url;
 	m_Port = Port;
 	m_User = User;
@@ -32,8 +34,10 @@ void connection_pool::init(string url, string User, string PassWord, string DBNa
 	m_DatabaseName = DBName;
 	m_close_log = close_log;
 
+	//建立设置的mysql链接
 	for (int i = 0; i < MaxConn; i++)
 	{
+		//分配一個mysql客戶端鏈接服务端
 		MYSQL *con = NULL;
 		con = mysql_init(con);
 
@@ -42,6 +46,7 @@ void connection_pool::init(string url, string User, string PassWord, string DBNa
 			LOG_ERROR("MySQL Error");
 			exit(1);
 		}
+		//与服务端进行链接
 		con = mysql_real_connect(con, url.c_str(), User.c_str(), PassWord.c_str(), DBName.c_str(), Port, NULL, 0);
 
 		if (con == NULL)
@@ -49,10 +54,12 @@ void connection_pool::init(string url, string User, string PassWord, string DBNa
 			LOG_ERROR("MySQL Error");
 			exit(1);
 		}
+		//放入线程池列表
 		connList.push_back(con);
 		++m_FreeConn;
 	}
 
+	//设置信号量
 	reserve = sem(m_FreeConn);
 
 	m_MaxConn = m_FreeConn;
@@ -67,8 +74,11 @@ MYSQL *connection_pool::GetConnection()
 	if (0 == connList.size())
 		return NULL;
 
+	//当前线程等待链接释放，但是本身有空闲线程的话不需要等待才对
+	//储备， reserve是个sem 信号量，数量为空闲链接数
 	reserve.wait();
 	
+	//从队列里获取链接
 	lock.lock();
 
 	con = connList.front();
@@ -95,6 +105,7 @@ bool connection_pool::ReleaseConnection(MYSQL *con)
 
 	lock.unlock();
 
+	//填补信号量
 	reserve.post();
 	return true;
 }
@@ -131,7 +142,9 @@ connection_pool::~connection_pool()
 	DestroyPool();
 }
 
+//RAII 获取数据库链接时管理链接伴随RAII实体的生命周期进行释放，其实可以使用unique_prt 在自定义函数来管理sql
 connectionRAII::connectionRAII(MYSQL **SQL, connection_pool *connPool){
+	//获取空闲链接
 	*SQL = connPool->GetConnection();
 	
 	conRAII = *SQL;

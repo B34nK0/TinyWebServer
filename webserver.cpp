@@ -2,7 +2,7 @@
 
 WebServer::WebServer()
 {
-    //http_conn类对象
+    //http_conn类对象，存储会话 最大为65536
     users = new http_conn[MAX_FD];
 
     //root文件夹路径
@@ -10,10 +10,12 @@ WebServer::WebServer()
     getcwd(server_path, 200);
     char root[6] = "/root";
     m_root = (char *)malloc(strlen(server_path) + strlen(root) + 1);
+    //拷贝
     strcpy(m_root, server_path);
+    //拼接
     strcat(m_root, root);
 
-    //定时器
+    //定时器 用于设置用户会话链接超时
     users_timer = new client_data[MAX_FD];
 }
 
@@ -31,16 +33,24 @@ WebServer::~WebServer()
 void WebServer::init(int port, string user, string passWord, string databaseName, int log_write, 
                      int opt_linger, int trigmode, int sql_num, int thread_num, int close_log, int actor_model)
 {
+    //数据库配置
     m_port = port;
     m_user = user;
     m_passWord = passWord;
     m_databaseName = databaseName;
+    //数据库链接数
     m_sql_num = sql_num;
+    //线程池数
     m_thread_num = thread_num;
+    
     m_log_write = log_write;
+    //设置close关闭tcp链接时的行为
     m_OPT_LINGER = opt_linger;
+    //epoll触发模式 lt et
     m_TRIGMode = trigmode;
+
     m_close_log = close_log;
+    //线程池模型 reactor  preactor
     m_actormodel = actor_model;
 }
 
@@ -74,12 +84,15 @@ void WebServer::trig_mode()
 
 void WebServer::log_write()
 {
+    //开启日志
     if (0 == m_close_log)
     {
         //初始化日志
         if (1 == m_log_write)
+        //设置800的缓存队列进行异步刷盘
             Log::get_instance()->init("./ServerLog", m_close_log, 2000, 800000, 800);
         else
+        //0的缓存队列表示实时刷盘
             Log::get_instance()->init("./ServerLog", m_close_log, 2000, 800000, 0);
     }
 }
@@ -90,7 +103,7 @@ void WebServer::sql_pool()
     m_connPool = connection_pool::GetInstance();
     m_connPool->init("localhost", m_user, m_passWord, m_databaseName, 3306, m_sql_num, m_close_log);
 
-    //初始化数据库读取表
+    //初始化数据库读取表, users指向数组的第一个
     users->initmysql_result(m_connPool);
 }
 
@@ -106,7 +119,7 @@ void WebServer::eventListen()
     m_listenfd = socket(PF_INET, SOCK_STREAM, 0);
     assert(m_listenfd >= 0);
 
-    //优雅关闭连接
+    //设置linger 优雅关闭连接
     if (0 == m_OPT_LINGER)
     {
         struct linger tmp = {0, 1};
@@ -121,21 +134,28 @@ void WebServer::eventListen()
     int ret = 0;
     struct sockaddr_in address;
     bzero(&address, sizeof(address));
+    //ipv4
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = htonl(INADDR_ANY);
     address.sin_port = htons(m_port);
 
     int flag = 1;
+    //设置端口释放后可立即复用，主动调用close的一方会进入到time_wait，reuseaddr在bind之前设置，使time_wait不需要等待2分钟（2MSL，也可以配置）
     setsockopt(m_listenfd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
     ret = bind(m_listenfd, (struct sockaddr *)&address, sizeof(address));
     assert(ret >= 0);
+    
+// 第二个参数backlog为建立好连接处于ESTABLISHED状态的队列的长度，处于listen状态的
+//syn队列即半链接队列会收到客户端链接的syn，而服务端回的fin暂未被确认时的客户端请求，当客户端回ack时，即转为established状态
     ret = listen(m_listenfd, 5);
     assert(ret >= 0);
 
+    //全局变量 TIMESLOT最小超时单位
     utils.init(TIMESLOT);
 
     //epoll创建内核事件表
     epoll_event events[MAX_EVENT_NUMBER];
+    //监听5个socket
     m_epollfd = epoll_create(5);
     assert(m_epollfd != -1);
 

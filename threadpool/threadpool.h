@@ -38,11 +38,14 @@ threadpool<T>::threadpool( int actor_model, connection_pool *connPool, int threa
 {
     if (thread_number <= 0 || max_requests <= 0)
         throw std::exception();
+    //线程组
     m_threads = new pthread_t[m_thread_number];
     if (!m_threads)
         throw std::exception();
+    //创建线程
     for (int i = 0; i < thread_number; ++i)
     {
+        //worker为线程执行函数
         if (pthread_create(m_threads + i, NULL, worker, this) != 0)
         {
             delete[] m_threads;
@@ -96,11 +99,13 @@ void *threadpool<T>::worker(void *arg)
     pool->run();
     return pool;
 }
+//工作线程采用while获取请求队列里的请求， 进程结束时 如果停止线程池？
 template <typename T>
 void threadpool<T>::run()
 {
     while (true)
     {
+        //信号量
         m_queuestat.wait();
         m_queuelocker.lock();
         if (m_workqueue.empty())

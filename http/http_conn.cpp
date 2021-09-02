@@ -19,7 +19,7 @@ map<string, string> users;
 
 void http_conn::initmysql_result(connection_pool *connPool)
 {
-    //先从连接池中取一个连接
+    //栈对象connectionRAII管理数据库链接池获取到的mysql链接
     MYSQL *mysql = NULL;
     connectionRAII mysqlcon(&mysql, connPool);
 

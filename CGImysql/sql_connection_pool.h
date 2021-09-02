@@ -27,6 +27,7 @@ public:
 	void init(string url, string User, string PassWord, string DataBaseName, int Port, int MaxConn, int close_log); 
 
 private:
+	//数据库链接池为单例模式，私有化构造函数保证不能随意构造
 	connection_pool();
 	~connection_pool();
 
